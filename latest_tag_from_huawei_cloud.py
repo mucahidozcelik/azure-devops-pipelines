@@ -9,7 +9,7 @@ sk = os.getenv('SK')
 credentials = BasicCredentials(ak, sk)
 client = SwrClient.new_builder() \
     .with_credentials(credentials) \
-    .with_region(SwrRegion.value_of('tr-west-1')) \
+    .with_region(SwrRegion.value_of('region')) \
     .build()
 
 try:

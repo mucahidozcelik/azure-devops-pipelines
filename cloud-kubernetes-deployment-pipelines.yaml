@@ -1,0 +1,37 @@
+trigger: none
+
+resources:
+- repo: self
+
+variables:
+  - group: DockerCredentials
+  - group: HuaweiAuth
+  - group: ProdBuildServer
+
+stages:
+- stage: BuildAndPushStage
+  displayName: Build and Push Docker Image
+  jobs:
+  - job: BuildAndPushJob
+    displayName: Build and Push Docker Image
+    pool:
+      name: $(buildpoolname)
+      demands:
+        - 'agent.name -equals $(buildagentname)'
+    steps:
+    - script: |
+        echo $(dockerPassword) | docker login $(dockerRegistry) -u $(dockerUsername) --password-stdin
+      displayName: 'Docker Login'
+    - script: |
+        python3 $(pyscript)
+      displayName: 'Fetch Latest Docker Image Tag'
+    - script: |
+       echo "dockerImageTag: $(dockerImageTag)"
+      displayName: "Check dockerimagetag variable"  
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'Huawei Cloud SWR'
+        repository: $(dockerRepository)
+        command: 'buildAndPush'
+        Dockerfile: $(Dockerfile)
+        tags: $(dockerImageTag)

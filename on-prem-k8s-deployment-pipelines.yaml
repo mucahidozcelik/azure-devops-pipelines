@@ -1,0 +1,81 @@
+trigger: none
+
+resources:
+- repo: self
+
+variables:
+  - group: DockerCredentials
+  - group: KubernetesVar
+  - group: HuaweiAuth
+  - group: StageBuildServer
+  - group: StageDeployKubServer
+
+stages:
+- stage: BuildAndPushStage
+  displayName: Build and Push Docker Image
+  jobs:
+  - job: BuildAndPushJob
+    displayName: Build and Push Docker Image
+    pool:
+      name: $(buildpoolname)
+      demands:
+        - 'agent.name -equals $(buildagentname)'
+    steps:
+    - script: |
+        echo $(dockerPassword) | docker login $(dockerRegistry) -u $(dockerUsername) --password-stdin
+      displayName: 'Docker Login'
+    - script: |
+        python3 $(pyscript)
+      displayName: 'Fetch Latest Docker Image Tag'
+    - script: |
+       echo "dockerImageTag: $(dockerImageTag)"
+      displayName: "Check dockerimagetag variable"  
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'Huawei Cloud SWR'
+        repository: $(dockerRepository)
+        command: 'buildAndPush'
+        Dockerfile: $(Dockerfile)
+        tags: $(dockerImageTag)
+      displayName: 'Build and Push Docker Image'
+    
+    - script: |
+       echo "dockerImageTag: $(dockerImageTag)"
+      displayName: "Check dockerimagetag variable"
+    
+    - bash: echo "##vso[task.setvariable variable=dockerImageTag;isOutput=true]$(dockerImageTag)"
+      name: dockerImageTag1
+
+- stage: DeployToKubernetes
+  displayName: Deploy to Kubernetes
+  dependsOn: BuildAndPushStage
+  jobs:
+  - job: DeployToKubernetes
+    displayName: Deploy to Kubernetes
+    pool:
+      name: $(deploypoolname)
+      demands:
+        - 'agent.name -equals $(deployagentname)'
+    variables:
+      dockerImageTag2: $[stageDependencies.BuildAndPushStage.BuildAndPushJob.outputs['dockerImageTag1.dockerImageTag']]
+      
+    steps:
+    - bash: echo $(dockerImageTag2)
+    - script: |
+        echo "Docker Image Tag2: $(dockerImageTag2)"
+        if [ -z "$(dockerImageTag2)" ]; then
+          echo "ERROR: dockerImageTag variable is empty!"
+          exit 1
+        fi
+      displayName: 'Check Docker Image Tag'
+      
+    - script: |
+        echo "Logging in to Docker registry..."
+        echo $(dockerPassword) | sudo -S docker login $(dockerRegistry) -u $(dockerUsername) --password-stdin
+      displayName: 'Docker Login'
+      
+    - script: |
+        echo "Deploying Docker image with tag: $(dockerImageTag2) to Kubernetes..."
+        kubectl set image deployment/$(kubernetesDeploymentName) $(kubernetesDeploymentName)=$(dockerRegistry)/$(dockerRepository):$(dockerImageTag2) -n $(kubernetesNamespace)
+        kubectl rollout status deployment/$(kubernetesDeploymentName) -n $(kubernetesNamespace)
+      displayName: 'Deploy to Kubernetes'      
