@@ -20,7 +20,6 @@ try:
     response = client.list_repository_tags(request)
     print(f'Response body: {response.body}')
 
-    # Yanıtı doğru şekilde işleyelim
     if hasattr(response, 'body') and isinstance(response.body, list):
         tags = [item.tag for item in response.body if hasattr(item, 'tag')]  
         print(f'Fetched tags: {tags}')
